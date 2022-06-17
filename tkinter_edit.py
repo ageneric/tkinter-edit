@@ -4,7 +4,6 @@ This application is unsafe; you may run Python statements using the menu.
 
 Permission to use, copy, modify, and/or distribute this software for any
 purpose with or without fee is hereby granted.
-
 THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY (etc.) IN NO EVENT
 SHALL THE AUTHOR BE LIABLE FOR ANY DAMAGES WHATSOEVER (etc.) ARISING
 OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
@@ -33,7 +32,6 @@ class App(tk.Frame):
         self.master.resizable(True, True)
 
         self.text_font = font.Font(family="Consolas", size=11)
-        self.text_font_bold = font.Font(family="Consolas", size=11, weight="bold")
         self.char_count_var = tk.StringVar()
         self.changes = - changes_threshold  # counts up when key released
         
@@ -109,10 +107,10 @@ class App(tk.Frame):
     def save(self, event=None):
         text_data_to_save = self.entry.get('1.0', tk.END)[:-1]  # remove trailing \n
         with open(save_location, "w+") as f:
-            f.write(text_data_to_save)  
+            f.write(text_data_to_save)
         characters = len(text_data_to_save)
         linebreaks = text_data_to_save.count("\n")
-        
+
         self.char_count_var.set("Saved {} characters ({})".format(
             characters - linebreaks, characters))
         self.changes = - changes_threshold - 2  # subtract Ctrl and S presses
@@ -281,7 +279,7 @@ def tk_text_index(position):
         return ".".join(offsets)
     return None
 
-# String function accessible in an eval function
+# Helper function accessible in an eval function
 def shift_character(char, n):
     if ord('a') <= ord(char) <= ord('z'):
         offset = ord('a')
