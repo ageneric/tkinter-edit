@@ -14,6 +14,7 @@ from tkinter import ttk
 from tkinter import font
 from pathlib import Path
 import importlib
+import importlib.util
 
 # The default save location, to open on start.
 save_location = "tkinter_edit_save.txt"
@@ -36,7 +37,7 @@ class App(tk.Frame):
         self.changes = - changes_threshold  # counts up when key released
         
         self.create_widgets()
-        self.with_style()
+        self.configure_style()
 
         try:
             with open(save_location, "r") as f:
@@ -98,7 +99,7 @@ class App(tk.Frame):
 
         self.master.bind('<Control-s>', self.save)
         
-    def with_style(self):
+    def configure_style(self):
         style = ttk.Style()
         style.configure("Result.TLabel", background="#d9e0df")
         style.configure("Result.TFrame", background="#d9e0df")
