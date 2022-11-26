@@ -25,6 +25,8 @@ changes_threshold = 40
 
 TK_TEXT_INDEX_INSTRUCTION = """For example, 1.0 is the start of the text.
 Accepts also {line}.start, {line}.end, start, end."""
+UPDATE_ON_KEYSYMBOLS = ("BackSpace", "Return", "Insert", "Delete")
+
 
 class App(tk.Frame):
     def __init__(self, master=None):
@@ -46,14 +48,23 @@ class App(tk.Frame):
             print("(file not found: start blank file)")
 
     def create_widgets(self):
+        is_osx = self.master.tk.call("tk", "windowingsystem") in ("aqua", "classic")
         # Toolbar menu
         self.menu = tk.Menu(self.master)
-        self.menu.add_command(label="Save", command=self.save_with_message)
-        self.menu.add_command(label="New", command=self.set_file)
-        self.menu.add_command(label="Open", command=lambda: self.set_open(True))
-        self.menu.add_command(label="Join", command=lambda: self.set_open(False))
-        self.menu.add_command(label="Characters", command=self.set_counter)
-        self.menu.add_command(label="Seek", command=self.set_position)
+        if is_osx:
+            # On OSX only cascades are shown in the main menu, so add options to a cascade
+            file_menu = tk.Menu(self.menu, tearoff=0)
+        else:
+            # On Windows commands are supported in the main menu
+            file_menu = self.menu
+        file_menu.add_command(label="Save", command=self.save_with_message)
+        file_menu.add_command(label="New", command=self.set_file)
+        file_menu.add_command(label="Open", command=lambda: self.set_open(True))
+        file_menu.add_command(label="Join", command=lambda: self.set_open(False))
+        file_menu.add_command(label="Characters", command=self.set_counter)
+        file_menu.add_command(label="Seek", command=self.set_position)
+        if is_osx:
+            self.menu.add_cascade(label="File", menu=file_menu)
         # Run sub-menu to run arbitrary Python statements and hardcoded modules
         cascade = tk.Menu(self.menu, tearoff=0)
         modules = [("url_parameter", lambda: self.run_module("url_parameter", ""))]
@@ -149,12 +160,13 @@ class App(tk.Frame):
             save_location = open_location  # update global variable
             print("Set new save location to {}".format(save_location))
             self.master.title(str(save_location))
-            
+
+            new_text_data = ""
             try:
                 with open(save_location, "r") as f:
                     if len(self.entry.get(work_start, tk.END)) > 1:
                         self.entry.insert("1.0", "\n---\n")
-                        new_text_data = f.read()
+                    new_text_data = f.read()
             except FileNotFoundError:
                 print("(file not found: keeping old data)")
             else:
@@ -184,10 +196,10 @@ class App(tk.Frame):
             self.set_character_count(text_data)
 
     def update(self, event=None):    
-        # Increment counter to warn the user when closing with changes made.
+        # Increment counter to warn the user when closing with changes made
         self.changes += 1
-        # Update character count on releasing Backspace, Enter, Space, Insert, Del
-        if event.keycode in (0x08, 0x0d, 0x20, 0x2d, 0x2e):
+        # Update character count on releasing certain keys e.g. Return or Space
+        if event.keysym in UPDATE_ON_KEYSYMBOLS or event.keycode == 0x20:
             text_data = self.entry.get(work_start, tk.END)
             text_data = text_data.split("---")[0]  # ignore after ---
             self.set_character_count(text_data)
