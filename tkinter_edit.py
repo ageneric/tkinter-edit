@@ -23,13 +23,15 @@ from pathlib import Path
 import importlib
 import importlib.util
 
+work_start = "1.0"
 # The default save location, to open on start.
 save_location = Path.cwd() / "tkinter_edit_save.txt"
-text_filetypes = [("text files", ".txt"), ("all files", ".*")]
-work_start = "1.0"
 # Number of changes until confirmation is required to close the application.
-changes_threshold = 40
-
+CHANGES_THRESHOLD = 40
+# Keypresses that will force a re-count of the number of characters.
+UPDATE_ON_KEYSYMBOLS = ("BackSpace", "Return", "Insert", "Delete")
+# Suggested file extensions in file selection dialogs.
+text_filetypes = [("text files", ".txt"), ("all files", ".*")]
 
 TK_TEXT_INDEX_INSTRUCTION = """Seek to {character} or {line}.{character},
 For example, character '0' or line '1.0' is the start of the text.
@@ -43,7 +45,7 @@ class App(tk.Frame):
 
         self.text_font = font.Font(family="Consolas", size=11)
         self.char_count_var = tk.StringVar()
-        self.changes = - changes_threshold  # counts up when key released
+        self.changes = - CHANGES_THRESHOLD  # counts up when key released
         
         self.create_widgets()
         self.configure_style()
@@ -53,18 +55,27 @@ class App(tk.Frame):
                 self.entry.insert("1.0", f.read())
         except FileNotFoundError:
             print("(file not found: start blank file)")
+            self.char_count_var.set("File not found! Create a new file using the toolbar")
 
     def create_widgets(self):
-        # Toolbar menu
+        is_osx = self.master.tk.call("tk", "windowingsystem") in ("aqua", "classic")
+
+        # Toolbar
         self.menu = tk.Menu(self.master)
-        self.menu.add_command(label="Save", command=self.save_with_message)
-        self.menu.add_command(label="New", command=self.set_file)
-        self.menu.add_command(label="Open", command=lambda: self.set_open(True))
-        self.menu.add_command(label="Join", command=lambda: self.set_open(False))
-        self.menu.add_command(label="Characters", command=self.set_counter)
-        self.menu.add_command(label="Seek", command=self.set_position)
-        self.menu.add_command(label="Find", command=self.set_position_find)
-        
+        if is_osx:
+            # On OSX only cascades are shown in the main menu,
+            # so add options to a cascade.
+            file_menu = tk.Menu(self.menu, tearoff=0)
+        else:
+            # On Windows commands are supported in the main menu.
+            file_menu = self.menu
+        file_menu.add_command(label="Save", command=self.save_with_message)
+        file_menu.add_command(label="New", command=self.set_file)
+        file_menu.add_command(label="Open", command=lambda: self.set_open(True))
+        file_menu.add_command(label="Join", command=lambda: self.set_open(False))
+        file_menu.add_command(label="Characters", command=self.set_counter)
+        file_menu.add_command(label="Seek", command=self.set_position)
+        file_menu.add_command(label="Find", command=self.set_position_find)
         # Sub-menu to run arbitrary Python statements and hardcoded modules.
         # Modules to import that appear in the Run menu if imported successfully.
         modules = [("url_parameter", lambda: self.run_module("url_parameter", ""))]
@@ -74,6 +85,9 @@ class App(tk.Frame):
                 cascade.add_command(label=label, command=command)
         cascade.add_separator()
         cascade.add_command(label="Run Statement", command=self.run_python_statement)
+        # Add cascades to the toolbar.
+        if is_osx:
+            self.menu.add_cascade(label="File", menu=file_menu)
         self.menu.add_cascade(label="Run...", menu=cascade)
         self.master.config(menu=self.menu)
 
@@ -126,12 +140,12 @@ class App(tk.Frame):
 
         self.char_count_var.set("Saved {} characters ({})".format(
             characters - linebreaks, characters))
-        self.changes = - changes_threshold - 2  # subtract Ctrl and S presses
+        self.changes = - CHANGES_THRESHOLD - 2  # subtract Ctrl and S presses
 
     def save_with_message(self):
         self.save()
         print("Saved to {}. Shortcut: Ctrl-S".format(save_location))
-        self.changes = - changes_threshold
+        self.changes = - CHANGES_THRESHOLD
         
     def set_counter(self):
         global work_start
@@ -204,8 +218,8 @@ class App(tk.Frame):
     def update(self, event=None):    
         # Increment counter to warn the user when closing with changes made.
         self.changes += 1
-        # Update character count on releasing Backspace, Enter, Space, Insert, Del
-        if event.keycode in (0x08, 0x0d, 0x20, 0x2d, 0x2e):
+        # Update character count on releasing certain keys e.g. Return or Space
+        if event.keysym in UPDATE_ON_KEYSYMBOLS or event.keycode == 0x20:
             text_data = self.entry.get(work_start, tk.END)
             text_data = text_data.split("---")[0]  # ignore after ---
             self.set_character_count(text_data)
@@ -312,7 +326,7 @@ class App(tk.Frame):
 
     def on_exit(self):
         message = "Close application? Changes ({}) not saved.".format(
-            self.changes + changes_threshold)
+            self.changes + CHANGES_THRESHOLD)
         if self.changes < 0 or tk.messagebox.askyesno("Exit", message):
             self.master.destroy()
 
