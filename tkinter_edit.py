@@ -1,12 +1,19 @@
-"""A basic text editor made in Tkinter with a character count.
-Opens a home file on start.
-This application is unsafe; you may run Python statements using the menu.
+"""A basic text editor made in Tkinter. A home file will be opened on start.
 
-Permission to use, copy, modify, and/or distribute this software for any
-purpose with or without fee is hereby granted.
-THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY (etc.) IN NO EVENT
-SHALL THE AUTHOR BE LIABLE FOR ANY DAMAGES WHATSOEVER (etc.) ARISING
-OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+Features:
+- Character count and word count, incl. and excl. newlines.
+- Evaluate Python statements on the text for fast editing.
+
+Warning:
+- This application permits arbitrary execution of code.
+
+Copyright (c) Kevin Gao 2024.
+
+Permission to use, copy, modify and distribute this software and its
+documentation for any purpose is hereby granted without fee, provided that
+this copyright and notice appears in all copies.
+
+The copyright holder disclaims all warranties with regard to this software.
 """
 import tkinter as tk
 from tkinter import N, S, W, E, filedialog, simpledialog
@@ -17,16 +24,16 @@ import importlib
 import importlib.util
 
 # The default save location, to open on start.
-save_location = "tkinter_edit_save.txt"
+save_location = Path.cwd() / "tkinter_edit_save.txt"
 text_filetypes = [("text files", ".txt"), ("all files", ".*")]
 work_start = "1.0"
 # Number of changes until confirmation is required to close the application.
 changes_threshold = 40
 
-TK_TEXT_INDEX_INSTRUCTION = """For example, 1.0 is the start of the text.
-Accepts also {line}.start, {line}.end, start, end."""
-UPDATE_ON_KEYSYMBOLS = ("BackSpace", "Return", "Insert", "Delete")
 
+TK_TEXT_INDEX_INSTRUCTION = """Seek to {character} or {line}.{character},
+For example, character '0' or line '1.0' is the start of the text.
+Accepts also {line}.start, {line}.end, start, end."""
 
 class App(tk.Frame):
     def __init__(self, master=None):
@@ -48,26 +55,20 @@ class App(tk.Frame):
             print("(file not found: start blank file)")
 
     def create_widgets(self):
-        is_osx = self.master.tk.call("tk", "windowingsystem") in ("aqua", "classic")
         # Toolbar menu
         self.menu = tk.Menu(self.master)
-        if is_osx:
-            # On OSX only cascades are shown in the main menu, so add options to a cascade
-            file_menu = tk.Menu(self.menu, tearoff=0)
-        else:
-            # On Windows commands are supported in the main menu
-            file_menu = self.menu
-        file_menu.add_command(label="Save", command=self.save_with_message)
-        file_menu.add_command(label="New", command=self.set_file)
-        file_menu.add_command(label="Open", command=lambda: self.set_open(True))
-        file_menu.add_command(label="Join", command=lambda: self.set_open(False))
-        file_menu.add_command(label="Characters", command=self.set_counter)
-        file_menu.add_command(label="Seek", command=self.set_position)
-        if is_osx:
-            self.menu.add_cascade(label="File", menu=file_menu)
-        # Run sub-menu to run arbitrary Python statements and hardcoded modules
-        cascade = tk.Menu(self.menu, tearoff=0)
+        self.menu.add_command(label="Save", command=self.save_with_message)
+        self.menu.add_command(label="New", command=self.set_file)
+        self.menu.add_command(label="Open", command=lambda: self.set_open(True))
+        self.menu.add_command(label="Join", command=lambda: self.set_open(False))
+        self.menu.add_command(label="Characters", command=self.set_counter)
+        self.menu.add_command(label="Seek", command=self.set_position)
+        self.menu.add_command(label="Find", command=self.set_position_find)
+        
+        # Sub-menu to run arbitrary Python statements and hardcoded modules.
+        # Modules to import that appear in the Run menu if imported successfully.
         modules = [("url_parameter", lambda: self.run_module("url_parameter", ""))]
+        cascade = tk.Menu(self.menu, tearoff=0)
         for label, command in modules:
             if importlib.util.find_spec(label) is not None:
                 cascade.add_command(label=label, command=command)
@@ -117,7 +118,7 @@ class App(tk.Frame):
         style.configure("Dim.TLabel", foreground="#555555")
 
     def save(self, event=None):
-        text_data_to_save = self.entry.get('1.0', tk.END)[:-1]  # remove trailing \n
+        text_data_to_save = self.entry.get("1.0", tk.END)[:-1]  # remove trailing \n
         with open(save_location, "w+") as f:
             f.write(text_data_to_save)
         characters = len(text_data_to_save)
@@ -150,6 +151,10 @@ class App(tk.Frame):
         self.entry.tag_configure("promptline", foreground="#555555")
 
     def set_open(self, clear=False):
+        """Read from a file. Takes a boolean parameter:
+        clear = True: overwrite text and change the save location (Open).
+        clear = False: append to text and don't change the save location (Join).
+        """
         global save_location
         print("Current save location is {}".format(save_location))
         
@@ -157,13 +162,13 @@ class App(tk.Frame):
             initialdir=Path.cwd(), filetypes=text_filetypes, defaultextension="txt")
 
         if open_location:
-            save_location = open_location  # update global variable
-            print("Set new save location to {}".format(save_location))
-            self.master.title(str(save_location))
-
-            new_text_data = ""
+            if clear:
+                save_location = open_location  # update global variable
+                print("Set new save location to {}".format(save_location))
+                self.master.title(str(save_location))
+            
             try:
-                with open(save_location, "r") as f:
+                with open(open_location, "r") as f:
                     if len(self.entry.get(work_start, tk.END)) > 1:
                         self.entry.insert("1.0", "\n---\n")
                     new_text_data = f.read()
@@ -175,6 +180,7 @@ class App(tk.Frame):
                 self.entry.insert("1.0", new_text_data)
 
     def set_file(self):
+        """Set the save location to a new location."""
         global save_location
         print("Current save location is {}".format(save_location))
         
@@ -196,10 +202,10 @@ class App(tk.Frame):
             self.set_character_count(text_data)
 
     def update(self, event=None):    
-        # Increment counter to warn the user when closing with changes made
+        # Increment counter to warn the user when closing with changes made.
         self.changes += 1
-        # Update character count on releasing certain keys e.g. Return or Space
-        if event.keysym in UPDATE_ON_KEYSYMBOLS or event.keycode == 0x20:
+        # Update character count on releasing Backspace, Enter, Space, Insert, Del
+        if event.keycode in (0x08, 0x0d, 0x20, 0x2d, 0x2e):
             text_data = self.entry.get(work_start, tk.END)
             text_data = text_data.split("---")[0]  # ignore after ---
             self.set_character_count(text_data)
@@ -209,21 +215,56 @@ class App(tk.Frame):
         linebreaks = text_data.count("\n") + add_to_count - 1
         words = len(text_data.split())
         
-        self.char_count_var.set("{} characters ({})  {} words".format(
-            characters - linebreaks, characters, words))
+        self.char_count_var.set("{} words  {} characters ({})".format(
+            words, characters - linebreaks, characters))
 
     def set_position(self):
         new_seek_position = simpledialog.askstring("Seek to Position",
-            "Seek to {line}.{character},\n" + TK_TEXT_INDEX_INSTRUCTION,
+            TK_TEXT_INDEX_INSTRUCTION,
             parent=self.master)
 
         text_index = tk_text_index(new_seek_position)
         if text_index:
+            self.entry.focus()
+            self.entry.mark_set("insert", text_index)
+            self.entry.see(text_index)
+
+    def find(self, search_term):
+        text = self.entry
+        text.tag_remove("search", "1.0", tk.END)
+
+        if not search_term:
+            return None
+
+        # Search through the text from the moving pointer idx
+        last_idx = idx_end = idx = "1.0"
+        while last_idx:
+            idx = text.search(search_term, idx_end, nocase=1, stopindex=tk.END)
+            if not idx: break
+            last_idx = idx
+            idx_end = f"{idx}+{len(search_term)}c"
+            text.tag_add("search", idx, idx_end)
+
+        # Colour in located string.
+        text.tag_config("search", underline=1)
+        return last_idx
+
+    def set_position_find(self):
+        search_term = simpledialog.askstring("Find Last Instance",
+            "Find this string (not case-sensitive) and select the last instance.", parent=self.master)
+
+        text_index = self.find(search_term)
+        if text_index:
+            self.entry.focus()
+            text_index_end = f"{text_index}+{len(search_term)}c"
+            self.entry.tag_add(tk.SEL, text_index, text_index_end)
+            self.entry.mark_set("insert", text_index_end)
             self.entry.see(text_index)
 
     def run_python_statement(self):
         """Evaluates a Python statement.
-        If the function returns a string, it replaces the entry text."""
+        If the function returns a string, it replaces the entry text.
+        """
         code = simpledialog.askstring("Run Statement",
             "Evaluates a Python statement. 'text' or 't' contains the entry text.",
             parent=self.master)
@@ -245,7 +286,8 @@ class App(tk.Frame):
         """Imports and runs the given function name within an external module
         of the same name. The function must take a single argument,
         either the entry text in 'text' mode or else an input string.
-        If the function returns a string, it replaces the entry text."""
+        If the function returns a string, it replaces the entry text.
+        """
         module = importlib.import_module(function)
         if mode == "text":
             text_data = self.entry.get(work_start, tk.END)[:-1]
@@ -281,6 +323,9 @@ def tk_text_index(position):
         
         offsets = ["1", "0"]
         new_offsets = position.split(".")
+
+        if len(new_offsets) == 1 and position.isdecimal():
+            return f"1.0+{position}c"
         
         if len(new_offsets) > 0 and new_offsets[0].isdigit():
             offsets[0] = new_offsets[0]
